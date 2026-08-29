@@ -61,6 +61,25 @@ function IconCompass() {
   )
 }
 
+function IconSpark() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M10.5 4 12 9l5 1.5-5 1.5-1.5 5-1.5-5-5-1.5 5-1.5Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M18.5 15v3M17 16.5h3"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 const SERVICES: Service[] = [
   {
     icon: <IconBlueprint />,
@@ -70,9 +89,9 @@ const SERVICES: Service[] = [
   },
   {
     icon: <IconFoundation />,
-    title: 'Legacy System Audits & Modernization',
+    title: 'Legacy Modernization & Platform Migration',
     description:
-      'Inherited a codebase nobody wants to touch? We audit what you have, explain what’s actually going on in plain language, and put together a realistic plan to modernize it in stages — no risky "rewrite everything" bet required.',
+      'Inherited a codebase nobody wants to touch, or stuck on a platform that’s holding you back? We audit what you have, explain what’s actually going on in plain language, and put together a realistic plan to modernize or migrate it in stages — no risky "rewrite everything" bet required.',
   },
   {
     icon: <IconCloud />,
@@ -85,6 +104,12 @@ const SERVICES: Service[] = [
     title: 'Backend Systems & APIs',
     description:
       'Well-built backends are invisible when they work and painful when they don’t. We design and build APIs and services that are straightforward to reason about, easy to extend, and built to hold up under real usage.',
+  },
+  {
+    icon: <IconSpark />,
+    title: 'AI Features & Automation',
+    description:
+      'Chatbots, workflow automation, internal tools built on your own data — whatever shape it takes, we’ve built AI features like this before and know where they tend to break. We can also help you figure out whether it’s worth doing at all.',
   },
   {
     icon: <IconCompass />,

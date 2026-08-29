@@ -1,8 +1,6 @@
 import { KeystoneMark } from './KeystoneMark'
 import './Footer.css'
 
-const CONTACT_EMAIL = 'hello@keystonetechnology.dev'
-
 export function Footer() {
   const year = new Date().getFullYear()
 
@@ -24,9 +22,6 @@ export function Footer() {
           <a href="#contact">Contact</a>
         </nav>
 
-        <a className="footer__email" href={`mailto:${CONTACT_EMAIL}`}>
-          {CONTACT_EMAIL}
-        </a>
       </div>
 
       <div className="container footer__bottom">

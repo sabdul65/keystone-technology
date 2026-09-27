@@ -38,30 +38,41 @@ const CONTENT_TYPES = {
 
 // ---------- storage ----------
 
+// Reviews are kept in memory (the app runs a single instance) and written to
+// disk in the background. /home on App Service is a network share where a
+// write can stall for up to a minute, so requests must never wait on it.
+let reviewsPromise = null
 let writeQueue = Promise.resolve()
 
-async function loadReviews() {
-  try {
-    return JSON.parse(await readFile(DATA_FILE, 'utf8'))
-  } catch (error) {
+function loadReviews() {
+  reviewsPromise ??= readFile(DATA_FILE, 'utf8').then(JSON.parse, (error) => {
     if (error.code === 'ENOENT') return []
+    reviewsPromise = null
     throw error
-  }
+  })
+  return reviewsPromise
 }
 
-// Serialize read-modify-write cycles so concurrent requests can't clobber each other.
-function updateReviews(mutate) {
-  const run = writeQueue.then(async () => {
-    const reviews = await loadReviews()
-    const result = mutate(reviews)
-    await mkdir(DATA_DIR, { recursive: true })
-    const tmp = `${DATA_FILE}.tmp`
-    await writeFile(tmp, JSON.stringify(reviews, null, 2))
-    await rename(tmp, DATA_FILE)
-    return result
-  })
-  writeQueue = run.catch(() => {})
-  return run
+function persist(reviews) {
+  const snapshot = JSON.stringify(reviews, null, 2)
+  writeQueue = writeQueue
+    .then(async () => {
+      const started = Date.now()
+      await mkdir(DATA_DIR, { recursive: true })
+      const tmp = `${DATA_FILE}.tmp`
+      await writeFile(tmp, snapshot)
+      await rename(tmp, DATA_FILE)
+      const took = Date.now() - started
+      if (took > 2000) console.warn(`Saving reviews to disk took ${took}ms`)
+    })
+    .catch((error) => console.error('Failed to save reviews to disk:', error))
+}
+
+async function updateReviews(mutate) {
+  const reviews = await loadReviews()
+  const result = mutate(reviews)
+  persist(reviews)
+  return result
 }
 
 function toPublic(review) {
@@ -134,8 +145,12 @@ async function handleApi(req, res, pathname) {
 
   if (pathname === '/api/reviews' && req.method === 'POST') {
     const body = await readJsonBody(req)
-    // Honeypot field — real visitors never see or fill it.
-    if (body.website) return sendJson(res, 201, { id: randomUUID() })
+    // Honeypot field — hidden from people, and named so browser autofill
+    // never recognises it. Pretend success so bots don't adapt.
+    if (body.kt_hp_field) {
+      console.log('Discarded review caught by honeypot')
+      return sendJson(res, 201, { id: randomUUID(), saved: false })
+    }
 
     const rating = Number(body.rating)
     const review = {
@@ -159,7 +174,8 @@ async function handleApi(req, res, pathname) {
       return true
     })
     if (!saved) return sendJson(res, 503, { error: 'Too many pending reviews' })
-    return sendJson(res, 201, { id: review.id })
+    console.log(`Saved pending review ${review.id}`)
+    return sendJson(res, 201, { id: review.id, saved: true })
   }
 
   if (pathname.startsWith('/api/admin/')) {
@@ -167,7 +183,7 @@ async function handleApi(req, res, pathname) {
 
     if (pathname === '/api/admin/reviews' && req.method === 'GET') {
       const reviews = await loadReviews()
-      return sendJson(res, 200, reviews.sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
+      return sendJson(res, 200, [...reviews].sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
     }
 
     const match = pathname.match(/^\/api\/admin\/reviews\/([\w-]+)$/)
@@ -237,6 +253,8 @@ createServer(async (req, res) => {
     if (!error.status) console.error(error)
   }
 }).listen(PORT, () => {
+  // Warm the cache so the first visitor doesn't wait on the network share.
+  loadReviews().catch((error) => console.error('Failed to load reviews:', error))
   console.log(`Keystone server on :${PORT} (static: ${STATIC_DIR}, data: ${DATA_FILE})`)
   if (ADMIN_PASSWORD.length < 12) console.warn('ADMIN_PASSWORD is missing or shorter than 12 characters — admin API disabled.')
 })

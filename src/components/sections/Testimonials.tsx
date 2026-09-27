@@ -96,7 +96,7 @@ export function Testimonials() {
   const [rating, setRating] = useState(0)
   const [review, setReview] = useState('')
   const [canPublish, setCanPublish] = useState(true)
-  const [website, setWebsite] = useState('')
+  const [trap, setTrap] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [approved, setApproved] = useState<Testimonial[]>([])
 
@@ -119,12 +119,15 @@ export function Testimonials() {
       const saveResponse = await fetch('/api/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, role, rating, review, okToPublish: canPublish, website }),
+        body: JSON.stringify({ name, email, role, rating, review, okToPublish: canPublish, kt_hp_field: trap }),
       })
       if (!saveResponse.ok) throw new Error('Could not save review')
+      const { saved } = await saveResponse.json()
 
-      // Then notify by email. The review is already saved, so a failed email isn't a failed submit.
-      await fetch(WEB3FORMS_ENDPOINT, {
+      // Then notify by email — only for reviews that were actually stored, so an
+      // email always means there's something waiting in /admin. The review is
+      // already saved, so a failed email isn't a failed submit.
+      if (saved) await fetch(WEB3FORMS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
@@ -274,16 +277,17 @@ export function Testimonials() {
                 />
               </div>
 
-              {/* Honeypot: hidden from people, filled in by spam bots */}
+              {/* Honeypot: hidden from people, filled in by spam bots. The name is
+                  deliberately meaningless so browser autofill never fills it. */}
               <input
                 type="text"
-                name="website"
+                name="kt_hp_field"
                 className="review__honeypot"
                 tabIndex={-1}
                 autoComplete="off"
                 aria-hidden="true"
-                value={website}
-                onChange={(event) => setWebsite(event.target.value)}
+                value={trap}
+                onChange={(event) => setTrap(event.target.value)}
               />
 
               <label className="review__consent">

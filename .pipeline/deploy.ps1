@@ -3,13 +3,17 @@
     Builds and deploys keystone-coop to Azure App Service.
 
 .DESCRIPTION
-    Runs `npm run build`, zips the resulting dist/ output (using forward-slash
+    Runs `npm run build`, zips server/server.mjs plus the dist/ output as public/ (using forward-slash
     zip entry names, since Windows' Compress-Archive writes backslashes that
     break the Linux-based App Service deploy backend), and pushes it with
     `az webapp deploy`.
 
 .PARAMETER ResourceGroup
     Azure resource group containing the web app. Defaults to rg-keystone-coop.
+
+.PARAMETER Subscription
+    Azure subscription holding the web app, so deploys work regardless of
+    the CLI's default subscription.
 
 .PARAMETER AppName
     Azure Web App name. Defaults to keystone-coop.
@@ -32,6 +36,7 @@
 param(
     [string]$ResourceGroup = "rg-keystone-coop",
     [string]$AppName = "keystone-coop",
+    [string]$Subscription = "09b5a451-64bd-49be-8c7f-ba44d8259a39",
     [switch]$SkipBuild,
     [switch]$CleanInstall
 )
@@ -60,7 +65,7 @@ try {
         throw "dist/ not found at $DistPath. Run without -SkipBuild first."
     }
 
-    Write-Host "==> Packaging dist/ into deploy.zip" -ForegroundColor Cyan
+    Write-Host "==> Packaging server.mjs + dist/ (as public/) into deploy.zip" -ForegroundColor Cyan
     if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
 
     # Build the zip by hand via System.IO.Compression so entry names use
@@ -72,27 +77,32 @@ try {
 
     $zip = [System.IO.Compression.ZipFile]::Open($ZipPath, [System.IO.Compression.ZipArchiveMode]::Create)
     try {
+        $level = [System.IO.Compression.CompressionLevel]::Optimal
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $zip, (Join-Path $RepoRoot "server/server.mjs"), "server.mjs", $level) | Out-Null
+
         Get-ChildItem -Path $DistPath -Recurse -File | ForEach-Object {
-            $relativePath = $_.FullName.Substring($DistPath.Length + 1).Replace('\', '/')
-            $entry = $zip.CreateEntry($relativePath, [System.IO.Compression.CompressionLevel]::Optimal)
-            $entryStream = $entry.Open()
-            try {
-                $fileStream = [System.IO.File]::OpenRead($_.FullName)
-                try {
-                    $fileStream.CopyTo($entryStream)
-                } finally {
-                    $fileStream.Close()
-                }
-            } finally {
-                $entryStream.Close()
-            }
+            $relativePath = "public/" + $_.FullName.Substring($DistPath.Length + 1).Replace('\', '/')
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $relativePath, $level) | Out-Null
         }
     } finally {
         $zip.Dispose()
     }
 
+    # The site is served by server.mjs (static files + reviews API) rather
+    # than `pm2 serve`. Setting this every deploy keeps it idempotent.
+    Write-Host "==> Ensuring startup command runs server.mjs" -ForegroundColor Cyan
+    az webapp config set `
+        --subscription $Subscription `
+        --resource-group $ResourceGroup `
+        --name $AppName `
+        --startup-file "node /home/site/wwwroot/server.mjs" `
+        --output none
+    if ($LASTEXITCODE -ne 0) { throw "az webapp config set failed" }
+
     Write-Host "==> Deploying to Azure Web App '$AppName' (resource group '$ResourceGroup')" -ForegroundColor Cyan
     az webapp deploy `
+        --subscription $Subscription `
         --resource-group $ResourceGroup `
         --name $AppName `
         --src-path $ZipPath `

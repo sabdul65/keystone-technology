@@ -19,6 +19,7 @@ export function Footer() {
           <a href="#about">About</a>
           <a href="#services">Services</a>
           <a href="#process">How We Work</a>
+          <a href="#reviews">Reviews</a>
           <a href="#contact">Contact</a>
         </nav>
 

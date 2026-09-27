@@ -8,4 +8,8 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  server: {
+    // Run `npm run server` alongside `npm run dev` for the reviews API.
+    proxy: { '/api': 'http://localhost:8080' },
+  },
 })
